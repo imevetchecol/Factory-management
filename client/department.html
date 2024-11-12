@@ -1,0 +1,177 @@
+<html>
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Departments Page</title>
+    </head>
+    <body onload="departmentsData()">
+        <header>
+            <nav>
+                <ul>
+                    <!-- Common menu for all pages -->
+                    <li><a href="department.html">Departments</a></li>
+                    <li><a href="shifts.html">Shifts</a></li>
+                    <li><a href="employees.html">Employees</a></li>
+                    <li><a href="users.html">Users</a></li>
+                    <li id="currentUserName" style="color: black; text-align: right;"></li>
+                    <li onclick="logout(); window.location.href='login.html';">
+                        <a href="login.html">Logout</a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+        
+        <main>
+            <div style="text-align: center;">
+                <h2>Departments </h2>
+                <input type="button" value="New Department" onclick="newDepartment()"> <br></br>
+            </div>
+            
+            <table border="1" id="departmentsTable" class="center">
+                <tr>
+                    <!-- A table showing all the departments -->
+                    <th>Name</th>
+                    <th>Manager Name</th>
+                    <th>Employees</th>
+                </tr>
+            </table>
+        </main>
+
+
+        <script>
+            // When loading the page, check that the token is saved in sessionStorage
+            const token = sessionStorage.getItem('token');
+            // if there is no token, the user disconnects
+            if (!token) { 
+                window.location.href = 'login.html';
+            }
+            // Saving the username from the sessionStorage
+            const userFullName = sessionStorage.getItem('userFullName');
+            //Displaying the connected username at the top of the page
+            document.getElementById('currentUserName').innerText = `${userFullName}`;
+            // This function when loading the page shows all the departments that exist in the DB
+            const departmentsData = async()=>{
+                // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                departmentsUrl =  "http://localhost:3000/department";
+                employeesUrl = 'http://localhost:3000/employees'
+                // Sending a request to accept all employees and all departments
+                try {
+                    const departmentResponse = await fetch(departmentsUrl)
+                    const employeResponse = await fetch(employeesUrl)
+
+                    if (!departmentResponse.ok && !employeResponse.ok) {
+                        throw new Error(`Response status: ${departmentResponse.status} ${employeResponse.status}`);
+                    }
+                    const departments = await departmentResponse.json();
+                    const employeesResData =  await employeResponse.json();
+                    // Defining a table where we will save the information
+                    const table = document.getElementById('departmentsTable');
+                    const tbody = table.querySelector('tbody');
+                    // Keeping the names of the department in the table and for each 
+                    //department display the employees and the manager of the department
+                    departments.forEach((element, index) => { 
+                        const manager = employeesResData.find(employeeData => employeeData._id === element.Manager)
+                        const employeesWorkInDepartment = employeesResData.filter(employee => employee.DepartmentID === element._id)
+                        let employeesList = ""
+
+                        var row = table.insertRow(index + 1);
+                        var nameCell = row.insertCell(0);
+                        var managerCell = row.insertCell(1);
+                        var employeesCell = row.insertCell(2);
+                        // Displaying the name of the department as a link
+                        nameCell.innerHTML =  `<a href="editDepartment.html?departId=${element._id}">${element.Name}</a>`;
+                        managerCell.innerHTML = manager.FirstName + " "+manager.LastName
+                        // Showing all the employees of the department and saving the employee's name as a link
+                        employeesWorkInDepartment.forEach(element => {
+                            employeesList += `<a href="editEmployee.html?employeeId=${element._id}">${element.FirstName} ${element.LastName}<br></a>`;     
+                        });
+                        employeesCell.innerHTML = employeesList
+                    });
+                } 
+                catch (error) {
+                    console.error(error.message); // Error handling if the request failed
+                }
+            }
+            const newDepartment = ()=>{
+                // Go to the create a new department page
+                window.location.href ='newDepartment.html'
+            }
+            const logout =()=>{
+                // Logging out of the site and deleting the token and the data that saved in sessionStorage
+                sessionStorage.removeItem('token')
+                sessionStorage.removeItem('userFullName')
+                sessionStorage.removeItem('loggedUserData')
+            }
+        </script>
+            
+    </body>
+</html>

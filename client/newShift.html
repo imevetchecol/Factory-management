@@ -1,0 +1,163 @@
+<html></html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="styles.css">
+        <title>Shifts Page</title>
+        </head>
+        <body>
+            <header>
+                <nav>
+                    <ul>
+                        <li><a href="department.html">Departments</a></li>
+                        <li><a href="shifts.html">Shifts</a></li>
+                        <li><a href="employees.html">Employees</a></li>
+                        <li><a href="users.html">Users</a></li>
+                        <li id="currentUserName" style="color: black; text-align: right;"></li>
+                        <li onclick="logout(); window.location.href='login.html';">
+                            <a href="login.html">Logout</a>
+                        </li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <h2 style="text-align: center;">Edit Shift </h2>
+                <form style="text-align: center;" onsubmit="return false;">
+                    <label for="date">Date:</label>
+                    <input type="texe" id="date" name="date" required><br><br>
+                    <label for="StartingHour">Starting Hour:</label>
+                    <input type="time" id="StartingHour" name="StartingHour" required><br><br>
+                    <label for="EndingHour">Ending Hour:</label>
+                    <input type="time" id="EndingHour" name="EndingHour" required><br><br>
+                    <button type="button"  onclick="addnewShift()">Save</button>
+                    <button type="button"  onclick="cancel()">Cancel</button>
+                </form>
+            </main>
+
+            <script> 
+         
+                const token = sessionStorage.getItem('token');
+                if (!token) { 
+                    window.location.href = 'login.html';
+                }
+                const userFullName = sessionStorage.getItem('userFullName');
+                document.getElementById('currentUserName').innerText = `${userFullName}`;
+
+                const addnewShift = async()=>{
+                    
+                    // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+                    const shiftsUrl = "http://localhost:3000/shifts";
+                    const shiftsDate = document.getElementById("date").value
+                    const StartingHour = document.getElementById("StartingHour").value
+                    const EndingHour = document.getElementById("EndingHour").value
+                    // Sending a request to create a new shift
+                    if(shiftsDate && StartingHour && EndingHour){
+                        newShiftObj ={
+                            Date: shiftsDate,
+                            StartingHour: StartingHour,
+                            EndingHour:EndingHour
+                        }
+                        try {
+                        const resp = await fetch(shiftsUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newShiftObj),
+                        });
+
+                        if (!resp.ok) {
+                            // NEED TO ADD ALRET TO THE USER
+                            return response.json().then(err => {
+                            alert(err.error)});
+                        }
+                        alert("Shift successfully added")
+                        } 
+                        catch (error) {
+                            console.error('err:', error);
+                        }
+                    }
+                    else{
+                        alert("All fields must be entered");
+                    }
+                }
+        
+                const cancel = () => {
+                    //Back to shifts screen
+                    window.location.href = 'shifts.html'; 
+                }
+                const logout =()=>{
+                    // Logging out of the site and deleting the token and the data that saved in sessionStorage
+                    sessionStorage.removeItem('token')
+                    sessionStorage.removeItem('userFullName')
+                    sessionStorage.removeItem('loggedUserData')
+                }
+            </script>
+            
+        </body>
+</html>

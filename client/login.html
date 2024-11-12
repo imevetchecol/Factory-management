@@ -1,0 +1,65 @@
+<html>
+  <body>
+    <form style="text-align: center;" onsubmit="return false;">
+      <h1 style="color: cadetblue;">Factory management</h1><br>
+      <label for="fusername">Username:</label><br>
+      <input type="text" id="username" name="fusername" required><br><br>
+      <label for="femail">Email:</label><br>
+      <input type="text" id="email" name="femail" required><br><br>
+      <button type="button"  onclick="login()">Login</button>
+    </form>
+
+    <script>
+      const url = 'http://localhost:3000/auth/login';
+
+      async function login() {
+        // Saving the user's login information
+        const loginData = {
+          username: document.getElementById('username').value,
+          email: document.getElementById('email').value,
+        };
+        // Sending a login request to the server
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginData),
+          });
+
+          if (!resp.ok) {
+            // Response error handling
+            return resp.json().then(err => {
+            alert(err.error)});
+          }
+          // Storing the response in a variable
+          const data = await resp.json();
+          // Saving the information in sessionStorage
+          sessionStorage.token = data.token;
+          sessionStorage.setItem('userFullName', data.userName);
+          // Sending a request to receive all the logged in user information
+          const usersUrl = "http://localhost:3000/users";   
+          try {
+            const usersResponse = await fetch(usersUrl)
+
+            if (!usersResponse.ok) {
+              throw new Error(`Response status: ${usersResponse.status}`);
+            }
+
+            const allUsers = await usersResponse.json();
+            const registeredUser = allUsers.find(user => user.FullName === data.userName)
+            const loggedUserData = JSON.stringify(registeredUser);
+            sessionStorage.setItem('loggedUserData', loggedUserData);
+          } 
+          catch (error) {
+            //error handling
+            console.error(error.message);
+          }
+          // When logging in, opening a user page
+          window.location = './users.html';
+        } catch (error) {
+          console.error('err:', error);
+        }
+      }
+    </script>
+  </body>
+</html>

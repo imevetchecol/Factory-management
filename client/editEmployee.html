@@ -1,0 +1,394 @@
+<html>
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Employees Page</title>
+    </head>
+    <body onload="editingUserData()">
+        <header>
+            <nav>
+                <ul>
+                    <li><a href="department.html">Departments</a></li>
+                    <li><a href="shifts.html">Shifts</a></li>
+                    <li><a href="employees.html">Employees</a></li>
+                    <li><a href="users.html">Users</a></li>
+                    <li id="currentUserName" style="color: black; text-align: right;"></li>
+                    <li onclick="logout(); window.location.href='login.html';">
+                        <a href="login.html">Logout</a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+        
+        <main>
+            <h2 style="text-align: center;">Edit Employee </h2>
+            <!-- <div id="currentUserName" style="text-align: center;"></div> <br><br> -->
+
+            <form style="text-align: center;" onsubmit="return false;">
+                <label for="firstname">First Name:</label>
+                <input type="text" id="firstname" name="firstname" required><br><br>
+                <label for="lastname">Last Name:</label>
+                <input type="text" id="lastname" name="lastname" required><br><br>
+                <label for="year">Start Work Year:</label>
+                <input type="text" id="year" name="year" required><br><br>
+                <label for="department">Department Id:</label>
+                <input type="text" id="department" name="department" required><br><br>
+                <select name="shifts" id="shifts">
+                    <option>please select shift</option>
+                </select> <br><br>
+                <button type="button"  onclick="updateEmployee()">Update</button>
+                <button type="button"  onclick="deleteEmployeeData()">Delete</button>
+            </form>
+            <h4 style="text-align: center;">all user's shifts</h4>
+            <table border="1" id="shiftsTable" class="center">
+                <tr>
+                    <th>Date</th>
+                    <th>Starting Hour</th>
+                    <th>Ending Hour</th>
+                </tr>
+            </table>
+        </main>
+
+        <script>
+            const token = sessionStorage.getItem('token');
+            if (!token) { 
+                window.location.href = 'login.html';
+            }
+            const userFullName = sessionStorage.getItem('userFullName');
+            document.getElementById('currentUserName').innerText = `${userFullName}`;
+            let selectedEmployeeId 
+            let selectedEmployeeShifts
+            const editingUserData = async()=>{
+
+               // url to the users actions file
+               const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                    // Update in DB about the remaining ActionAllowd number
+                    try {
+                    const userUpdateResp = await fetch(updateUserUrl, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userobjForUpdateCurrnetAc),
+                    });
+                    
+                    if (!userUpdateResp.ok) {
+                        // Display an error message if the request fails
+                        throw new Error(`Response status: ${userUpdateResp.status}`);
+                    }
+                }   
+                catch (error) {
+                    console.error('err:', error);// Error handling if the request failed
+                }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                // Access to specific parameters
+                const employeeId = urlParams.get('employeeId');
+                selectedEmployeeId = employeeId;
+                const employeesUrl = `http://localhost:3000/employees/${employeeId}`;
+                const shiftsUrl = 'http://localhost:3000/shifts';
+                const employeResponse = await fetch(employeesUrl)
+                const shiftsResponse = await fetch(shiftsUrl)
+                // Sending a request to accept a specific user and accepting all shifts
+                if (!employeResponse.ok && !shiftsResponse.ok)  {
+                    throw new Error(`Response status: ${employeResponse.status}`);
+                }
+                const shiftsResData =  await shiftsResponse.json()
+                const employeeRespData = await employeResponse.json()
+              
+                document.getElementById('firstname').value = `${employeeRespData.FirstName}`;
+                document.getElementById('lastname').value = `${employeeRespData.LastName}`;
+                document.getElementById('year').value = `${employeeRespData.StartWorkYear}`;
+                document.getElementById('department').value = `${employeeRespData.DepartmentID}`;
+                // save in the list all the shifts 
+                var dropdown = document.getElementById("shifts");
+                shiftsResData.forEach(element => {
+                    var opt = document.createElement("option"); 
+                    opt.text = `Date: ${element.Date} ${element.StartingHour}- ${element.EndingHour}`;
+                    opt.value = element._id;
+                    dropdown.options.add(opt);
+                });
+
+                const employeeShifts = employeeRespData.ShiftId
+                const table = document.getElementById('shiftsTable');
+                const tbody = table.querySelector('tbody');
+                selectedEmployeeShifts = employeeShifts
+                // save in  table all the shifts of the specific employee
+                employeeShifts.forEach((element, index) => { 
+                    const shift = shiftsResData.find(shift => shift._id === element)
+                    
+                    var row = table.insertRow(index + 1);
+                    var dateCell = row.insertCell(0);
+                    var StartingHourCell = row.insertCell(1);
+                    var EndingHourCell = row.insertCell(2);
+                    
+                    dateCell.innerHTML = shift.Date
+                    StartingHourCell.innerHTML = shift.StartingHour
+                    EndingHourCell.innerHTML = shift.EndingHour
+                });
+            } 
+
+            // updateEmployee function
+            const updateEmployee = async()=>{
+
+               // url to the users actions file
+               const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                const employeesUrl = `http://localhost:3000/employees/${selectedEmployeeId}`;
+                // save the new information of the employee you want to update in the object
+                const newEmployObj = {
+                    FirstName: document.getElementById("firstname").value,
+                    LastName: document.getElementById("lastname").value,
+                    StartWorkYear: document.getElementById('year').value,
+                    DepartmentID: document.getElementById('department').value,
+                    ShiftId: selectedEmployeeShifts
+                }
+                //Saving the selected user for the employee in a variable
+                var shiftsDropdown = document.getElementById("shifts")
+                const selectedShiftId = shiftsDropdown.options[shiftsDropdown.selectedIndex].value;
+                // Make sure all fields are not empty
+                if(newEmployObj.FirstName && newEmployObj.LastName && newEmployObj.StartWorkYear && newEmployObj.DepartmentID){
+                    // Verify that the user has  selected a shift for the employee
+                    if(selectedShiftId !== "please select shift"){
+                        // Make sure the employee is not assigned to a shift
+                        const isExistShift = selectedEmployeeShifts.find(shift => shift === selectedShiftId)
+                        // if the selected shift is not assigned to the employee, we will add it to his shift list
+                        if(!isExistShift){
+                            selectedEmployeeShifts.push(selectedShiftId) 
+                        }
+                        else{
+                            alert("This shift is already assigned to a user")
+                        }
+                    }
+                    // Sending a request to update the employee's details   
+                    try {
+                    const resp = await fetch(employeesUrl, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newEmployObj),
+                    });
+
+                    if (!resp.ok) {
+                        // Response error handling
+                        return response.json().then(err => {
+                        alert(err.error)});
+                    }
+                    alert("User update successfully");
+
+                    } catch (error) {
+                        console.error('err:', error);
+                    }
+                }
+                else{
+                    alert("All fields must be entered");
+                }
+            } 
+            
+            const deleteEmployeeData = async()=>{
+
+               // url to the users actions file
+               const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+                // Sending a request to delete a specific employee by ID
+                const employeesUrl = `http://localhost:3000/employees/${selectedEmployeeId}`;
+                const resp = await fetch(employeesUrl, {
+                    method: 'DELETE'
+                });
+
+                if (!resp.ok) {
+                    // Response error handling
+                    return response.json().then(err => {
+                    alert(err.error)});
+                }
+                alert("User delete successfully");
+            }
+            const logout =()=>{
+                // Logging out of the site and deleting the token and the data that saved in sessionStorage
+                sessionStorage.removeItem('token')
+                sessionStorage.removeItem('userFullName')
+                sessionStorage.removeItem('loggedUserData')
+            }
+        </script>
+            
+    </body>
+</html>

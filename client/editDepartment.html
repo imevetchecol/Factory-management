@@ -1,0 +1,560 @@
+<html>
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Edit Department</title>
+    </head>
+    <body onload="editDepartmentData()">
+        <header>
+            <nav>
+                <ul>
+                    <li><a href="department.html">Departments</a></li>
+                    <li><a href="shifts.html">Shifts</a></li>
+                    <li><a href="employees.html">Employees</a></li>
+                    <li><a href="users.html">Users</a></li>
+                    <li id="currentUserName" style="color: black; text-align: right;"></li>
+                    <li onclick="logout(); window.location.href='login.html';">
+                        <a href="login.html">Logout</a>
+                    </li>
+                  
+                </ul>
+            </nav>
+        </header>
+        
+        <main>
+            <h2 style="text-align: center;">Edit Department </h2>
+            <form style="text-align: center;" onsubmit="return false;">
+                <label for="DepartmentName">Name:</label>
+                <input type="text" id="DepartmentName" name="DepartmentName" required><br><br>
+                <label for="manager">Manager:</label>
+                <input type="text" id="manager" name="manager" required><br><br>
+                <button type="button"  onclick="upadateDepartment()">Update</button>
+                <button type="button"  onclick="deletDepartment()">Delete</button><br><br>
+                <select name="employees" id="employeesList">
+                    <option id="selectedEmployee">please select employee</option>
+                </select>
+                <button type="button" ; onclick="addEmployeeToDepartment()">Add</button>
+            </form>
+        </main>
+
+
+        <script>
+            // When loading the page, check that the token is saved in sessionStorage
+            const token = sessionStorage.getItem('token');
+            if (!token) { 
+                window.location.href = 'login.html';
+            }
+            // if there is no token, the user disconnects
+            const userFullName = sessionStorage.getItem('userFullName');
+            document.getElementById('currentUserName').innerText = `${userFullName}`;
+            // Defining global variables
+            let editDepartmentId;
+            let allEmployeesList;
+
+            const editDepartmentData = async ()=>{
+
+                // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                    // Update in DB about the remaining ActionAllowd number
+                    try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                // Access to the specific parameter the ID of the department
+                const departmentId = urlParams.get('departId');
+                editDepartmentId = departmentId
+                // Sending a request to a specific department
+                const departmentUrl = `http://localhost:3000/department/${departmentId}`;
+                const employeesUrl = 'http://localhost:3000/employees'
+                
+                const departmentResponse = await fetch(departmentUrl)
+                const employeResponse = await fetch(employeesUrl)
+               
+                if (!employeResponse.ok && !departmentResponse.ok)  {
+                    throw new Error(`Response status: ${employeResponse.status} ${departmentResponse.status}`);
+                }
+                const employeesResData =  await employeResponse.json()
+                const departmentResData =  await departmentResponse.json()
+                // Saving all employees in the global variable
+                allEmployeesList = employeesResData
+                document.getElementById('DepartmentName').value = `${departmentResData.Name}`;
+                document.getElementById('manager').value = `${departmentResData.Manager}`;
+                // Saving all employees who do not work in the selected department
+                const EmployeesNotFromSelectedDepartment = employeesResData.filter(empData => empData.DepartmentID !== departmentId)
+                // Saving employees in a  list
+                var dropdown = document.getElementById("employeesList");
+                EmployeesNotFromSelectedDepartment.forEach(element => {
+                    var opt = document.createElement("option"); 
+                    opt.text = `${element.FirstName} ${element.LastName}`;
+                    opt.value = element._id;
+                    dropdown.options.add(opt);
+                });
+            }
+            
+            const upadateDepartment = async ()=>{
+                // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+                // Sending a request to get a specific department by ID
+                const departmentUrl = `http://localhost:3000/department/${editDepartmentId}`;
+                // Saving the department details in the object
+                const newDepartmenetObj = {
+                    Name: document.getElementById("DepartmentName").value,
+                    Manager: document.getElementById("manager").value,
+                }
+                // Checking that department name and department manager are not empty
+                if(newDepartmenetObj.Name && newDepartmenetObj.Manager){
+                    // Sending a request to update department details
+                    try {
+                        const resp = await fetch(departmentUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newDepartmenetObj),
+                        });
+
+                        if (!resp.ok) {
+                            // verify that the response is ok
+                            return response.json().then(err => {
+                            alert(err.error)});
+                        }
+                        // Displaying a message that the department has been successfully updated
+                        alert("Department update successfully");
+
+                    } catch (error) {
+                        console.error('err:', error); //Error handling
+                    }
+                }
+                else{
+                    // If one of the details is missing, an alert will appear
+                    alert("All fields must be entered");
+                }
+            }
+
+            const deletDepartment = async ()=>{
+
+                // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                const departmentUrl = `http://localhost:3000/department/${editDepartmentId}`;
+                const employeesFromDepartment = allEmployeesList.filter(employee => employee.DepartmentID === editDepartmentId)
+                // Sending a request to delete a specific department by ID
+                const resp = await fetch(departmentUrl, {
+                    method: 'DELETE'
+                });
+
+                if (!resp.ok) {
+                   // Response error handling
+                    return response.json().then(err => {
+                    alert(err.error)});
+                }
+                // Display a alret that the department has been successfully deleted
+                alert("Department delete successfully");
+                // Go through all the employees who work in the department and update their department data
+                employeesFromDepartment.forEach(async element => {
+
+                    // url to the users actions file
+                    const usersUrl = 'http://localhost:3000/savejson';
+                    // Save current date
+                    const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                    // Retrieving user information saved in sessionStorage
+                    const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                    const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                    // Sending a request to the DB by ID to the connected user
+                    const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                    //Saving an object with all the user's information to update in the DB
+                    const userobjForUpdateCurrnetAc = {
+                        FullName: loggedUserData.FullName,
+                        NumOfActions: loggedUserData.NumOfActions,
+                        UserActionsId: loggedUserData.UserActionsId,
+                        ActionAllowd: 0
+                    }
+                    // Saving an object of all the user's actions in order to update the JSON actions file
+                    const actionsObj ={
+                    id: loggedUserData.UserActionsId,
+                    maxActions: loggedUserData.NumOfActions,
+                    date: date,
+                    actionAllowd: 0
+                    }
+                    // Sending a request to update a JSON file
+                    try {
+                        const resp = await fetch(usersUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                        });
+                    
+                        // Checks if the request was successful (status 200)
+                        if (!resp.ok) {
+                            throw new Error(`HTTP error! status: ${resp.status}`);
+                        }
+                        // Save the response
+                        const response = await resp.json();
+                        // Update ActionAllowd in the user
+                        userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                        // if the ActionAllowd number of the connected user is zero, the user is logged out
+                        if(Number(response.actionAllowd) === 0){
+                    
+                            sessionStorage.removeItem('token')
+                            sessionStorage.removeItem('userFullName')
+                            sessionStorage.removeItem('loggedUserData')
+                            window.location = './login.html';
+                        }
+
+                      // Update in DB about the remaining ActionAllowd number
+                      try {
+                        const userUpdateResp = await fetch(updateUserUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(userobjForUpdateCurrnetAc),
+                        });
+                        
+                        if (!userUpdateResp.ok) {
+                            // Display an error message if the request fails
+                            throw new Error(`Response status: ${userUpdateResp.status}`);
+                        }
+                    }   
+                    catch (error) {
+                        console.error('err:', error);// Error handling if the request failed
+                    }
+                   
+                    } catch (error) {
+                        console.error('Error:', error);  // Error handling if the request failed
+                    }
+
+                    const employeeUrl = `http://localhost:3000/employees/${element._id}`
+                    // Saving a object with all the employee's information
+                    const newEmployObj = {
+                        FirstName: element.FirstName,
+                        LastName: element.LastName,
+                        StartWorkYear: element.StartWorkYear,
+                        DepartmentID: '',
+                        ShiftId: element.ShiftId
+                    }
+                    // Sending an update request for a specific employee
+                    try {
+                    const resp = await fetch(employeeUrl, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newEmployObj),
+                    });
+
+                    if (!resp.ok) {
+                        //Response error handling
+                        return response.json().then(err => {
+                        alert(err.error)});
+                    }
+                    } catch (error) {
+                        console.error('err:', error);
+                    }
+                });   
+            }
+
+            const addEmployeeToDepartment =async ()=>{
+
+                // url to the users actions file
+                const usersUrl = 'http://localhost:3000/savejson';
+                // Save current date
+                const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+                // Retrieving user information saved in sessionStorage
+                const storedUserJson  = sessionStorage.getItem('loggedUserData');
+                const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+                // Sending a request to the DB by ID to the connected user
+                const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+                //Saving an object with all the user's information to update in the DB
+                const userobjForUpdateCurrnetAc = {
+                    FullName: loggedUserData.FullName,
+                    NumOfActions: loggedUserData.NumOfActions,
+                    UserActionsId: loggedUserData.UserActionsId,
+                    ActionAllowd: 0
+                }
+                // Saving an object of all the user's actions in order to update the JSON actions file
+                const actionsObj ={
+                   id: loggedUserData.UserActionsId,
+                   maxActions: loggedUserData.NumOfActions,
+                   date: date,
+                   actionAllowd: 0
+                }
+                // Sending a request to update a JSON file
+                try {
+                    const resp = await fetch(usersUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                    });
+                    
+                    // Checks if the request was successful (status 200)
+                    if (!resp.ok) {
+                        throw new Error(`HTTP error! status: ${resp.status}`);
+                    }
+                    // Save the response
+                    const response = await resp.json();
+                    // Update ActionAllowd in the user
+                    userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                    // if the ActionAllowd number of the connected user is zero, the user is logged out
+                    if(Number(response.actionAllowd) === 0){
+                 
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('userFullName')
+                        sessionStorage.removeItem('loggedUserData')
+                        window.location = './login.html';
+                    }
+
+                    // Update in DB about the remaining ActionAllowd number
+                    try {
+                    const userUpdateResp = await fetch(updateUserUrl, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userobjForUpdateCurrnetAc),
+                    });
+                    
+                    if (!userUpdateResp.ok) {
+                        // Display an error message if the request fails
+                        throw new Error(`Response status: ${userUpdateResp.status}`);
+                    }
+                }   
+                catch (error) {
+                    console.error('err:', error);// Error handling if the request failed
+                }
+                   
+                } catch (error) {
+                    console.error('Error:', error);  // Error handling if the request failed
+                }
+
+                const selectedEmployee = document.getElementById("employeesList")
+                let selectedEmployeeId = selectedEmployee.value
+                const employeesUrl = `http://localhost:3000/employees/${selectedEmployeeId}`;
+                const employeeData = allEmployeesList.find(employee  => employee._id === selectedEmployeeId)
+                // Saving in the object all the information of the employee you want to update
+                const newEmployObj = {
+                    FirstName: employeeData.FirstName,
+                    LastName: employeeData.LastName,
+                    StartWorkYear: employeeData.StartWorkYear,
+                    DepartmentID: editDepartmentId,
+                    ShiftId: employeeData.ShiftId
+                }
+                // Sending a request to add an employee to the selected department
+                try {
+                    const resp = await fetch(employeesUrl, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newEmployObj),
+                    });
+
+                    if (!resp.ok) {
+                        // Response error handling
+                        return response.json().then(err => {
+                        alert(err.error)});
+                    }
+                    // Displaying an alret to the user that the employee has been successfully added to the department
+                    alert("The user is added to the selected department");
+
+                }   catch (error) {
+                    console.error('err:', error);
+                }
+            }
+            
+            const logout =()=>{
+                // Logging out of the site and deleting the token and the data that saved in sessionStorage
+                sessionStorage.removeItem('token')
+                sessionStorage.removeItem('userFullName')
+                sessionStorage.removeItem('loggedUserData')
+            }
+        </script>
+            
+    </body>
+</html>

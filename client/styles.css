@@ -1,0 +1,51 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+header {
+    background-color: #37a8a6;
+    color: white;
+    position: fixed; /* הופך את התפריט לקבוע */
+    width: 100%; /* תופס את כל רוחב הדף */
+    top: 0; /* מיקום בראש הדף */
+    left: 0;
+    z-index: 1000; /* כדי שיהיה מעל לתוכן אחר */
+}
+
+nav ul {
+    list-style-type: none; /* מסיר את הסימונים של הרשימה */
+    margin: 0;
+    padding: 0;
+}
+
+nav ul li {
+    display: inline; /* מציג את הפריטים בשורה */
+}
+
+nav ul li a {
+    color: white;
+    text-decoration: none;
+    padding: 15px 20px; /* ריווח בין הפריטים */
+    display: inline-block; /* מאפשר ריווח טוב יותר */
+}
+
+nav ul li a:hover {
+    background-color: #575757; /* שינוי צבע בעת ריחוף */
+}
+
+main {
+    padding-top: 60px; /* רווח כדי שהתוכן לא יהיה מאחורי התפריט */
+}
+.center {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+
+  

@@ -1,0 +1,215 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Employees Page</title>
+</head>
+<body onload="getAllEmployees()">
+    <header>
+        <nav>
+            <ul>
+                <li><a href="department.html">Departments</a></li>
+                <li><a href="shifts.html">Shifts</a></li>
+                <li><a href="employees.html">Employees</a></li>
+                <li><a href="users.html">Users</a></li>
+                <li id="currentUserName" style="color: black; text-align: right;"></li>
+                <li onclick="logout(); window.location.href='login.html';">
+                    <a href="login.html">Logout</a>
+                </li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <h1 style="text-align: center;">Employees Page</h1>
+       
+        <div style="text-align: center;">
+            <input type="button" class="styled-button" value="New Employee" onclick="addNewEmployee()"><br><br>
+        
+            <select name="departments" id="departments" style="text-align: center;">
+            <option value="all">All</option>
+            </select> <br><br>
+        </div>
+        
+        <table border="1" id="myTable" class="center">
+            <tr>
+                <th>FullName</th>
+                <th>Department</th> 
+                <th>Shifts</th>
+            </tr>
+        </table>
+    </main>
+
+    <script>
+        const token = sessionStorage.getItem('token');
+
+        if (!token) { 
+            window.location.href = 'login.html';
+        }
+
+        const userFullName = sessionStorage.getItem('userFullName');
+        document.getElementById('currentUserName').innerText = `${userFullName}`;
+
+        const getAllEmployees = async () => {
+            // url to the users actions file
+            const usersUrl = 'http://localhost:3000/savejson';
+            // Save current date
+            const date =  new Date().toJSON().slice(0,10).replace(/-/g,'/');
+            // Retrieving user information saved in sessionStorage
+            const storedUserJson  = sessionStorage.getItem('loggedUserData');
+            const loggedUserData = storedUserJson  ? JSON.parse(storedUserJson ) : null;
+            // Sending a request to the DB by ID to the connected user
+            const updateUserUrl = `http://localhost:3000/users/${loggedUserData._id}`;
+            //Saving an object with all the user's information to update in the DB
+            const userobjForUpdateCurrnetAc = {
+                FullName: loggedUserData.FullName,
+                NumOfActions: loggedUserData.NumOfActions,
+                UserActionsId: loggedUserData.UserActionsId,
+                ActionAllowd: 0
+            }
+            // Saving an object of all the user's actions in order to update the JSON actions file
+            const actionsObj ={
+                id: loggedUserData.UserActionsId,
+                maxActions: loggedUserData.NumOfActions,
+                date: date,
+                actionAllowd: 0
+            }
+            // Sending a request to update a JSON file
+            try {
+                const resp = await fetch(usersUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(actionsObj),  // The data is sent as JSON
+                });
+                
+                // Checks if the request was successful (status 200)
+                if (!resp.ok) {
+                    throw new Error(`HTTP error! status: ${resp.status}`);
+                }
+                // Save the response
+                const response = await resp.json();
+                // Update ActionAllowd in the user
+                userobjForUpdateCurrnetAc.ActionAllowd = response.actionAllowd
+                // if the ActionAllowd number of the connected user is zero, the user is logged out
+                if(Number(response.actionAllowd) === 0){
+                
+                    sessionStorage.removeItem('token')
+                    sessionStorage.removeItem('userFullName')
+                    sessionStorage.removeItem('loggedUserData')
+                    window.location = './login.html';
+                }
+
+                // Update in DB about the remaining ActionAllowd number
+                try {
+                const userUpdateResp = await fetch(updateUserUrl, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userobjForUpdateCurrnetAc),
+                });
+                
+                if (!userUpdateResp.ok) {
+                    // Display an error message if the request fails
+                    throw new Error(`Response status: ${userUpdateResp.status}`);
+                }
+                }   
+                catch (error) {
+                    console.error('err:', error);// Error handling if the request failed
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);  // Error handling if the request failed
+            }
+            const employeesUrl = "http://localhost:3000/employees";
+            const departmentUrl = "http://localhost:3000/department";
+            const shiftsUrl = "http://localhost:3000/shifts";
+            var table = document.getElementById("myTable");
+            // Sending a request for a get all departments, shifts and employyes
+            try {
+                const [employeResponse, departmentResponse, shiftResponse] = await Promise.all([
+                    fetch(employeesUrl),
+                    fetch(departmentUrl),
+                    fetch(shiftsUrl)
+                ]);
+
+                if (!employeResponse.ok && departmentResponse.ok && shiftResponse.ok) {
+                    throw new Error(`Response status: ${employeResponse.status} ${departmentResponse.status}${shiftResponse.status}`);
+                }
+
+                const employees = await employeResponse.json();
+                const departments = await departmentResponse.json();
+                const shifts = await shiftResponse.json();
+               // Saving in the list all the departments
+                var dropdown = document.getElementById("departments");
+                departments.forEach(element => {
+                    var opt = document.createElement("option"); 
+                    opt.text = element.Name;
+                    opt.value = element.Name;
+                    dropdown.options.add(opt);
+                });
+            
+                const selectedDepartment = document.getElementById('departments');
+                const table = document.getElementById('myTable');
+                const tbody = table.querySelector('tbody');
+
+                selectedDepartment.addEventListener('change', function() {
+                    const selectedValue = selectedDepartment.value;
+                    const rows = tbody.getElementsByTagName('tr');
+
+                    for (let i = 1; i < rows.length; i++) {
+                        
+                        const departmentCell = rows[i].getElementsByTagName('td')[1];;
+                        const departmentValue = departmentCell.textContent 
+                        if (selectedValue === 'all' || selectedValue === departmentValue)  {
+                            rows[i].style.display = ''; 
+                        } else {
+                            rows[i].style.display = 'none'; 
+                        }
+                    }
+                });
+
+                employees.forEach((element, index) => {
+                    const employeeDepartment = element.DepartmentID ? departments.find(dep => dep._id === element.DepartmentID) : null;
+                    const employeeShifts = shifts.filter(shift => element.ShiftId.includes(shift._id));
+
+                    var row = table.insertRow(index + 1);
+                    var employeeCell = row.insertCell(0);
+                    var departmentCell = row.insertCell(1);
+                    var shiftCell = row.insertCell(2);
+
+                    var emloyeeShiftsList = "";
+                    var encodedEmployeeId = encodeURIComponent(element._id);
+                    
+                    employeeCell.innerHTML = `<a href="editEmployee.html?employeeId=${encodedEmployeeId}">${element.FirstName} ${element.LastName}</a>`;
+                    
+                    if (employeeDepartment) {
+                        var encodedDepartmentId = encodeURIComponent(employeeDepartment._id);
+                        departmentCell.innerHTML = `<a href="editDepartment.html?departId=${encodedDepartmentId}">${employeeDepartment.Name}</a>`;
+                    } else {
+                        departmentCell.innerHTML = ""; // Cell is empty if there is no DepartmentID
+                    }
+
+                    employeeShifts.forEach(shiftElement => {
+                        emloyeeShiftsList += `Date: ${shiftElement.Date}, Starting Hour: ${shiftElement.StartingHour}, Ending Hour: ${shiftElement.EndingHour}<br>`;
+                    });
+                    shiftCell.innerHTML = emloyeeShiftsList;
+                });
+
+
+            } catch (error) {
+                console.error(error.message);
+            }
+        };
+        const addNewEmployee = () => {
+            // Go to the new employee creation page
+            window.location.href = 'newEmployee.html'; 
+        }
+        const logout =()=>{
+            // Logging out of the site and deleting the token and the data that saved in sessionStorage
+            sessionStorage.removeItem('token')
+            sessionStorage.removeItem('userFullName')
+            sessionStorage.removeItem('loggedUserData')
+        }
+    </script>
+</body>
+</html>
